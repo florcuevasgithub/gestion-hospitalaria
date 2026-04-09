@@ -20,7 +20,12 @@ El sistema está construido sobre una arquitectura desacoplada:
 3.  **Gestión de Camas (Máquina de Estados):** Tablero de control visual que monitorea y actualiza el estado de las unidades (Disponible 🟢, Ocupada 🔴, Limpieza 🟡, Mantenimiento ⚫).
 4.  **Egresos Clínicos Completos:** Alta Médica, Defunción, Derivación (con hospital de destino) y Cambio de Cama por Falla Técnica (traslado sin cerrar la internación).
 5.  **Trazabilidad Continua:** Cada ingreso y egreso queda sellado criptográficamente con el UUID del personal médico en turno.
-6.  **Panel Epidemiológico:** Ranking de diagnósticos CIE-10 prevalentes con barras proporcionales, calculado en tiempo real desde las internaciones registradas.
+6.  **Dashboard Analítico en Tiempo Real:** KPIs clínicos calculados en el backend con filtro temporal (Hoy / Semana / Mes):
+    * **Ocupación:** porcentaje de camas ocupadas sobre el total, discriminado por tipo (Común vs. KPC).
+    * **Tasa de Mortalidad:** egresos por Defunción sobre total de egresos del período.
+    * **Estancia Media:** promedio de días de internación, redondeado hacia arriba para reflejar el consumo real del recurso cama.
+    * **Pacientes Internados:** listado en tiempo real con nombre, cama asignada, tipo de cama y días acumulados de estancia.
+7.  **Panel Epidemiológico:** Ranking de diagnósticos CIE-10 prevalentes con barras proporcionales, calculado en tiempo real desde las internaciones registradas. Las descripciones se resuelven dinámicamente desde el catálogo oficial sin mapeos hardcodeados.
 
 ## 🛠️ Ejecución Local
 
