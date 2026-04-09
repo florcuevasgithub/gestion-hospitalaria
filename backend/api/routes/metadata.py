@@ -76,6 +76,22 @@ def buscar_cie10(
     }
 
 
+@router.get("/cie10/catalogo")
+def get_cie10_catalogo(
+    _: Annotated[str, Depends(get_current_user)],
+):
+    """
+    Devuelve el catálogo CIE-10 completo como diccionario {codigo: descripcion}.
+    Usado por el frontend para resolver descripciones sin llamadas extra.
+    """
+    try:
+        catalogo = _cargar_cie10()
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {entrada["codigo"]: entrada["descripcion"] for entrada in catalogo}
+
+
 @router.get("/opciones")
 def get_opciones(
     _: Annotated[str, Depends(get_current_user)],
@@ -100,6 +116,7 @@ def get_opciones(
             "Alta Médica",
             "Defunción",
             "Derivación",
+            "Cambio de Cama (Falla Técnica)",
         ],
         "estado_cama": [
             "Disponible",

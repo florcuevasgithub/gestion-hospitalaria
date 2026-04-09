@@ -13,9 +13,9 @@ import {
   CheckCircle,
   PlusCircle,
 } from 'lucide-react'
-import { getDashboardStats } from '../api/dashboardService'
-import { getOpciones } from '../api/metadataService'
-import { registrarEgreso, actualizarEstadoCama } from '../api/internacionesService'
+import { getDashboardStats, getDiagnosticosPrevalentes } from '../api/dashboardService'
+import { getOpciones, getCatalogoCIE10 } from '../api/metadataService'
+import { registrarEgreso, actualizarEstadoCama, getCamasDisponibles } from '../api/internacionesService'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -53,6 +53,11 @@ export default function Dashboard({ onIrAIngreso = () => {} }) {
   const [modalDisponible, setModalDisponible] = useState(null) // { cama }
   const [modalMantenimiento, setModalMantenimiento] = useState(null) // { cama }
 
+  // Estado de diagnósticos prevalentes y catálogo CIE-10
+  const [diagnosticos, setDiagnosticos] = useState([])
+  const [catalogoCIE10, setCatalogoCIE10] = useState({})
+  const [cargandoDiagnosticos, setCargandoDiagnosticos] = useState(false)
+
   const cargarStats = useCallback(async (p) => {
     setCargando(true)
     setError(null)
@@ -66,9 +71,29 @@ export default function Dashboard({ onIrAIngreso = () => {} }) {
     }
   }, [])
 
+  const cargarDiagnosticos = useCallback(async () => {
+    setCargandoDiagnosticos(true)
+    try {
+      const [dataRanking, dataCatalogo] = await Promise.all([
+        getDiagnosticosPrevalentes(),
+        getCatalogoCIE10(),
+      ])
+      setDiagnosticos(dataRanking.ranking ?? [])
+      setCatalogoCIE10(dataCatalogo)
+    } catch {
+      setDiagnosticos([])
+    } finally {
+      setCargandoDiagnosticos(false)
+    }
+  }, [])
+
   useEffect(() => {
     cargarStats(periodo)
   }, [periodo, cargarStats])
+
+  useEffect(() => {
+    cargarDiagnosticos()
+  }, [cargarDiagnosticos])
 
   const pacientesPorCama = stats
     ? Object.fromEntries(
@@ -193,6 +218,18 @@ export default function Dashboard({ onIrAIngreso = () => {} }) {
               </div>
             ))}
           </div>
+
+          {/* ── Diagnósticos Prevalentes ── */}
+          <section className="mb-8">
+            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">
+              Diagnósticos Prevalentes (Top CIE-10)
+            </h2>
+            <DiagnosticosPrevalentes
+              diagnosticos={diagnosticos}
+              catalogo={catalogoCIE10}
+              cargando={cargandoDiagnosticos}
+            />
+          </section>
 
           {/* ── Grilla de camas ── */}
           <section>
@@ -424,27 +461,74 @@ function Overlay({ children, onClose }) {
 
 // ── Modal de Egreso ───────────────────────────────────────────────────────────
 
+const TIPO_CAMBIO_CAMA = 'Cambio de Cama (Falla Técnica)'
+const TIPO_DERIVACION  = 'Derivación'
+
 function ModalEgreso({ cama, paciente, onClose, onExito }) {
   const [tipoEgreso, setTipoEgreso] = useState('')
   const [opcionesEgreso, setOpcionesEgreso] = useState([])
+  const [camasDisponibles, setCamasDisponibles] = useState([])
+  const [nuevaCamaId, setNuevaCamaId] = useState('')
+  const [cargandoCamas, setCargandoCamas] = useState(false)
+  const [hospitalDestino, setHospitalDestino] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [error, setError] = useState(null)
 
+  const esCambioCama = tipoEgreso === TIPO_CAMBIO_CAMA
+  const esDerivacion  = tipoEgreso === TIPO_DERIVACION
+
+  // Carga opciones de egreso al montar
   useEffect(() => {
     getOpciones()
       .then((data) => setOpcionesEgreso(data.tipo_egreso ?? []))
-      .catch(() => setOpcionesEgreso(['Alta Medica', 'Defuncion', 'Derivacion']))
+      .catch(() => setOpcionesEgreso(['Alta Médica', 'Defunción', 'Derivación', TIPO_CAMBIO_CAMA]))
   }, [])
+
+  // Cuando el usuario elige "Cambio de Cama", carga las camas disponibles
+  useEffect(() => {
+    if (!esCambioCama) {
+      setNuevaCamaId('')
+      return
+    }
+    setCargandoCamas(true)
+    getCamasDisponibles()
+      .then((data) => {
+        const lista = (data.camas ?? []).filter((c) => c.id !== cama.id)
+        setCamasDisponibles(lista)
+      })
+      .catch(() => setCamasDisponibles([]))
+      .finally(() => setCargandoCamas(false))
+  }, [esCambioCama, cama.id])
+
+  const handleTipoEgresoChange = (e) => {
+    setTipoEgreso(e.target.value)
+    setHospitalDestino('')
+    setError(null)
+  }
 
   const handleConfirmar = async () => {
     if (!tipoEgreso) {
       setError('Seleccioná un motivo de egreso.')
       return
     }
+    if (esCambioCama && !nuevaCamaId) {
+      setError('Seleccioná la cama de destino.')
+      return
+    }
+    if (esDerivacion && !hospitalDestino.trim()) {
+      setError('Ingresá el hospital de destino.')
+      return
+    }
+
     setEnviando(true)
     setError(null)
+
+    const payload = { tipo_egreso: tipoEgreso }
+    if (esCambioCama) payload.nueva_cama_id = Number(nuevaCamaId)
+    if (esDerivacion)  payload.destino_derivacion = hospitalDestino.trim()
+
     try {
-      await registrarEgreso(paciente.internacion_id, { tipo_egreso: tipoEgreso })
+      await registrarEgreso(paciente.internacion_id, payload)
       onExito()
     } catch (err) {
       setError(err.response?.data?.detail ?? 'Error al registrar el egreso.')
@@ -482,11 +566,11 @@ function ModalEgreso({ cama, paciente, onClose, onExito }) {
         </div>
 
         {/* Selector de motivo */}
-        <div className="mb-5">
+        <div className="mb-4">
           <label className="block text-sm text-gray-300 mb-1.5">Motivo de Egreso</label>
           <select
             value={tipoEgreso}
-            onChange={(e) => setTipoEgreso(e.target.value)}
+            onChange={handleTipoEgresoChange}
             className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="">— Seleccioná —</option>
@@ -495,6 +579,53 @@ function ModalEgreso({ cama, paciente, onClose, onExito }) {
             ))}
           </select>
         </div>
+
+        {/* Selector de cama destino (solo para cambio de cama) */}
+        {esCambioCama && (
+          <div className="mb-4 animate-in fade-in slide-in-from-top-1 duration-200">
+            <label className="block text-sm text-gray-300 mb-1.5 flex items-center gap-1.5">
+              <Wrench size={13} className="text-orange-400" />
+              Cama de Destino
+            </label>
+            {cargandoCamas ? (
+              <p className="text-xs text-gray-500 animate-pulse py-2">Cargando camas disponibles...</p>
+            ) : camasDisponibles.length === 0 ? (
+              <p className="text-xs text-yellow-500 py-2">
+                No hay camas disponibles para el traslado en este momento.
+              </p>
+            ) : (
+              <select
+                value={nuevaCamaId}
+                onChange={(e) => setNuevaCamaId(e.target.value)}
+                className="w-full bg-gray-800 border border-orange-700/50 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                <option value="">— Seleccioná cama de destino —</option>
+                {camasDisponibles.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.codigo_cama}{c.tipo === 'KPC' ? ' (KPC)' : ''} — {c.sector?.nombre ?? 'Sin sector'}
+                  </option>
+                ))}
+              </select>
+            )}
+            <p className="text-[11px] text-gray-500 mt-1.5">
+              La cama actual ({cama.codigo_cama}) pasará a estado <span className="text-hospital-mantenimiento font-medium">Mantenimiento</span>.
+            </p>
+          </div>
+        )}
+
+        {/* Hospital de destino (solo para Derivación) */}
+        {esDerivacion && (
+          <div className="mb-4">
+            <label className="block text-sm text-gray-300 mb-1.5">Hospital de Destino</label>
+            <input
+              type="text"
+              value={hospitalDestino}
+              onChange={(e) => setHospitalDestino(e.target.value)}
+              placeholder="Ej. Hospital Rawson"
+              className="w-full bg-gray-800 border border-indigo-700/50 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500"
+            />
+          </div>
+        )}
 
         {/* Error */}
         {error && (
@@ -514,10 +645,16 @@ function ModalEgreso({ cama, paciente, onClose, onExito }) {
           </button>
           <button
             onClick={handleConfirmar}
-            disabled={enviando}
-            className="flex-1 bg-hospital-ocupada hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg py-2.5 text-sm font-semibold transition-all"
+            disabled={enviando || (esCambioCama && camasDisponibles.length === 0)}
+            className={`flex-1 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg py-2.5 text-sm font-semibold transition-all ${
+              esCambioCama ? 'bg-orange-600' : 'bg-hospital-ocupada'
+            }`}
           >
-            {enviando ? 'Procesando...' : 'Confirmar Egreso'}
+            {enviando
+              ? 'Procesando...'
+              : esCambioCama
+              ? 'Confirmar Traslado'
+              : 'Confirmar Egreso'}
           </button>
         </div>
       </div>
@@ -677,6 +814,75 @@ function ModalDisponible({ cama, onClose, onExito, onIrAIngreso }) {
         </div>
       </div>
     </Overlay>
+  )
+}
+
+// ── Panel de Diagnósticos Prevalentes ────────────────────────────────────────
+
+function DiagnosticosPrevalentes({ diagnosticos, catalogo, cargando }) {
+  if (cargando) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-8 bg-gray-800 rounded-lg animate-pulse" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (!diagnosticos || diagnosticos.length === 0) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 text-center">
+        <HeartPulse size={32} className="mx-auto mb-3 text-gray-700" />
+        <p className="text-sm text-gray-500">No hay internaciones registradas aún.</p>
+        <p className="text-xs text-gray-600 mt-1">Los diagnósticos aparecerán aquí una vez que se registren ingresos.</p>
+      </div>
+    )
+  }
+
+  const maxTotal = diagnosticos[0]?.total ?? 1
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+      <div className="space-y-3">
+        {diagnosticos.map((item, idx) => {
+          const porcentaje = Math.round((item.total / maxTotal) * 100)
+          const descripcion = catalogo[item.codigo_cie10] ?? item.codigo_cie10
+
+          return (
+            <div key={item.codigo_cie10} className="flex items-center gap-4">
+              {/* Ranking */}
+              <span className="text-xs font-mono text-gray-600 w-5 shrink-0 text-right">
+                {idx + 1}
+              </span>
+
+              {/* Código */}
+              <span className="text-xs font-mono font-semibold text-indigo-400 w-10 shrink-0">
+                {item.codigo_cie10}
+              </span>
+
+              {/* Descripción + barra */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-gray-300 truncate pr-2">{descripcion}</span>
+                  <span className="text-xs font-semibold text-white tabular-nums shrink-0">
+                    {item.total} {item.total === 1 ? 'caso' : 'casos'}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                    style={{ width: `${porcentaje}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 

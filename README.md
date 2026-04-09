@@ -17,8 +17,10 @@ El sistema está construido sobre una arquitectura desacoplada:
 
 1.  **Admisión de Pacientes:** Registro validado con interlock preventivo (no permite ingresos sin cama disponible ni diagnóstico estandarizado).
 2.  **Integración CIE-10:** Motor de búsqueda predictivo conectado al catálogo oficial de la Organización Mundial de la Salud para clasificar diagnósticos de UTI (ej. J18 Neumonía).
-3.  **Gestión de Camas (Máquina de Estados):** Tablero de control visual que monitorea y actualiza el estado de las unidades (Disponible 🟢, Ocupada 🔴, Limpieza 🟡).
-4.  **Trazabilidad Continua:** Cada ingreso y egreso (Alta, Derivación, Defunción) queda sellado criptográficamente con el UUID del personal médico en turno.
+3.  **Gestión de Camas (Máquina de Estados):** Tablero de control visual que monitorea y actualiza el estado de las unidades (Disponible 🟢, Ocupada 🔴, Limpieza 🟡, Mantenimiento ⚫).
+4.  **Egresos Clínicos Completos:** Alta Médica, Defunción, Derivación (con hospital de destino) y Cambio de Cama por Falla Técnica (traslado sin cerrar la internación).
+5.  **Trazabilidad Continua:** Cada ingreso y egreso queda sellado criptográficamente con el UUID del personal médico en turno.
+6.  **Panel Epidemiológico:** Ranking de diagnósticos CIE-10 prevalentes con barras proporcionales, calculado en tiempo real desde las internaciones registradas.
 
 ## 🛠️ Ejecución Local
 

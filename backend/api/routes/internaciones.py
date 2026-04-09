@@ -100,16 +100,20 @@ def egresar_paciente(
     user_id: str = Depends(get_current_user),
 ):
     """
-    Cierra el ciclo clínico de un paciente internado.
+    Gestiona el egreso o traslado de un paciente internado.
 
-    Flujo:
-    1. Valida que la internación exista y no esté ya cerrada.
-    2. Obtiene el cama_id asociado.
-    3. Registra fecha/hora de egreso y tipo de egreso en internacion.
-    4. Libera la cama pasándola a estado Limpieza.
+    Flujo A — Cambio de Cama (Falla Técnica):
+      1. Valida que nueva_cama_id esté presente y disponible.
+      2. Reasigna cama_id en la internación actual (sin cerrarla).
+      3. Pone la cama original en Mantenimiento.
+      4. Pone la cama nueva en Ocupada.
+
+    Flujo B — Alta / Defunción / Derivación:
+      1. Registra fecha_hora_egreso y tipo_egreso en la internación.
+      2. Pone la cama en Limpieza.
     """
     try:
-        # ── 1. Validar internación ───────────────────────────────────────────
+        # ── 1. Validar que la internación exista y esté abierta ─────────────
         resultado = (
             supabase.table("internacion")
             .select("id, cama_id, fecha_hora_egreso")
@@ -124,18 +128,73 @@ def egresar_paciente(
         if resultado.data["fecha_hora_egreso"] is not None:
             raise HTTPException(status_code=400, detail="La internación ya fue cerrada.")
 
-        # ── 2. Obtener cama_id ───────────────────────────────────────────────
-        cama_id = resultado.data["cama_id"]
+        cama_id_original = resultado.data["cama_id"]
 
-        # ── 3. Cerrar internación ────────────────────────────────────────────
+        # ════════════════════════════════════════════════════════════════════
+        # FLUJO A: Cambio de Cama por Falla Técnica
+        # ════════════════════════════════════════════════════════════════════
+        if payload.tipo_egreso == "Cambio de Cama (Falla Técnica)":
+
+            # ── 2. Validar cama destino ──────────────────────────────────────
+            res_nueva_cama = (
+                supabase.table("cama")
+                .select("id, estado")
+                .eq("id", payload.nueva_cama_id)
+                .single()
+                .execute()
+            )
+
+            if not res_nueva_cama.data:
+                raise HTTPException(status_code=404, detail="La cama destino no fue encontrada.")
+
+            if res_nueva_cama.data["estado"] != "Disponible":
+                raise HTTPException(status_code=400, detail="La cama destino no está disponible.")
+
+            # ── 3. Reasignar cama en la internación (sin cerrarla) ───────────
+            actualizacion = (
+                supabase.table("internacion")
+                .update({"cama_id": payload.nueva_cama_id})
+                .eq("id", internacion_id)
+                .execute()
+            )
+
+            if not actualizacion.data:
+                raise HTTPException(
+                    status_code=500,
+                    detail="No se pudo reasignar la cama en la internación.",
+                )
+
+            # ── 4. Cama original → Mantenimiento ────────────────────────────
+            supabase.table("cama").update({"estado": "Mantenimiento"}).eq("id", cama_id_original).execute()
+
+            # ── 5. Cama nueva → Ocupada ──────────────────────────────────────
+            supabase.table("cama").update({"estado": "Ocupada"}).eq("id", payload.nueva_cama_id).execute()
+
+            return {
+                "status": "ok",
+                "message": "Paciente transferido correctamente. Cama anterior en Mantenimiento.",
+                "internacion_id": internacion_id,
+                "cama_anterior_id": cama_id_original,
+                "cama_nueva_id": payload.nueva_cama_id,
+            }
+
+        # ════════════════════════════════════════════════════════════════════
+        # FLUJO B: Egreso real (Alta / Defunción / Derivación)
+        # ════════════════════════════════════════════════════════════════════
+
+        # ── 2. Registrar fecha y tipo de egreso ──────────────────────────────
         fecha_egreso = datetime.now(timezone.utc).isoformat()
+
+        datos_egreso = {
+            "tipo_egreso": payload.tipo_egreso,
+            "fecha_hora_egreso": fecha_egreso,
+        }
+        if payload.tipo_egreso == "Derivación" and payload.destino_derivacion:
+            datos_egreso["destino_derivacion"] = payload.destino_derivacion
 
         actualizacion = (
             supabase.table("internacion")
-            .update({
-                "tipo_egreso": payload.tipo_egreso,
-                "fecha_hora_egreso": fecha_egreso,
-            })
+            .update(datos_egreso)
             .eq("id", internacion_id)
             .execute()
         )
@@ -146,11 +205,11 @@ def egresar_paciente(
                 detail="No se pudo actualizar la internación en Supabase.",
             )
 
-        # ── 4. Liberar cama → Limpieza ───────────────────────────────────────
+        # ── 3. Cama original → Limpieza ──────────────────────────────────────
         liberacion = (
             supabase.table("cama")
             .update({"estado": "Limpieza"})
-            .eq("id", cama_id)
+            .eq("id", cama_id_original)
             .execute()
         )
 
@@ -160,14 +219,17 @@ def egresar_paciente(
                 detail="Internación cerrada, pero no se pudo actualizar el estado de la cama.",
             )
 
-        # ── 5. Respuesta exitosa ─────────────────────────────────────────────
-        return {
+        respuesta_egreso = {
             "status": "ok",
-            "message": f"Egreso registrado correctamente. La cama {cama_id} pasó a estado Limpieza.",
+            "message": f"Egreso registrado correctamente. La cama {cama_id_original} pasó a estado Limpieza.",
             "internacion_id": internacion_id,
             "tipo_egreso": payload.tipo_egreso,
             "fecha_hora_egreso": fecha_egreso,
         }
+        if payload.destino_derivacion:
+            respuesta_egreso["destino_derivacion"] = payload.destino_derivacion
+
+        return respuesta_egreso
 
     except HTTPException:
         raise

@@ -1,8 +1,10 @@
 import math
+from collections import Counter
 from datetime import datetime, timezone, timedelta
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from api.security import get_current_user
 from db.supabase_client import supabase
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
@@ -199,3 +201,46 @@ def get_dashboard_stats(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al calcular estadísticas: {str(e)}")
+
+
+@router.get("/diagnosticos-prevalentes")
+def get_diagnosticos_prevalentes(
+    _: Annotated[str, Depends(get_current_user)],
+    limite: int = Query(default=10, ge=1, le=50, description="Cantidad máxima de diagnósticos a devolver"),
+    periodo: Literal["day", "week", "month", "all"] = Query(
+        default="all",
+        description="Rango temporal: day | week | month | all",
+    ),
+):
+    """
+    Ranking de diagnósticos CIE-10 más frecuentes en internaciones.
+
+    Agrupa por codigo_cie10, cuenta ocurrencias y devuelve ordenado de mayor a menor.
+    Útil para análisis epidemiológico y detección de patrones en la UTI.
+    """
+    try:
+        query = supabase.table("internacion").select("codigo_cie10")
+
+        if periodo != "all":
+            inicio = _inicio_periodo(periodo)
+            query = query.gte("fecha_hora_ingreso", inicio.isoformat())
+
+        resultado = query.execute()
+        registros = resultado.data or []
+
+        conteo = Counter(r["codigo_cie10"] for r in registros)
+        ranking = [
+            {"codigo_cie10": codigo, "total": total}
+            for codigo, total in conteo.most_common(limite)
+        ]
+
+        return {
+            "periodo_consultado": periodo,
+            "total_registros_analizados": len(registros),
+            "ranking": ranking,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al calcular diagnósticos prevalentes: {str(e)}")
