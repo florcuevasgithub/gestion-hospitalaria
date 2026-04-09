@@ -8,7 +8,7 @@ Como Ingeniera Biomédica y Data Scientist, mi objetivo con este proyecto fue te
 
 El sistema está construido sobre una arquitectura desacoplada:
 
-* **Frontend (React + Vite + Tailwind CSS):** Interfaz de usuario reactiva, diseño de máquina de estados visual para las camas y manejo de formularios asíncronos.
+* **Frontend (React + Vite + Tailwind CSS):** Interfaz de usuario reactiva, diseño de máquina de estados con interfaz visual para las camas y manejo de formularios asíncronos.
 * **Backend (Python + FastAPI):** API RESTful de alto rendimiento. Implementa caché en memoria (`@lru_cache`) para búsquedas en tiempo real sobre el catálogo médico.
 * **Base de Datos & Auth (Supabase / PostgreSQL):** Almacenamiento relacional y sistema de autenticación seguro.
 * **Seguridad:** Validación criptográfica de tokens JWT en el backend para proteger endpoints clínicos.
