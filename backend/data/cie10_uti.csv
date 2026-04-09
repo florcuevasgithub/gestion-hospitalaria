@@ -1,0 +1,53 @@
+codigo,descripcion
+A00,Cólera
+A01,Fiebres tifoidea y paratifoidea
+A09,Diarrea y gastroenteritis de presunto origen infeccioso
+A15,Tuberculosis respiratoria confirmada
+A39,Infección meningocócica
+A40,Septicemia estreptocócica
+A41,Otras septicemias
+B15,Hepatitis aguda tipo A
+B16,Hepatitis aguda tipo B
+B18,Hepatitis viral crónica
+B20,Enfermedad por VIH resultante en enfermedades infecciosas
+B50,Paludismo (malaria) por Plasmodium falciparum
+B57,Enfermedad de Chagas
+B59,Neumocistosis
+C15,Tumor maligno del esófago
+C16,Tumor maligno del estómago
+C18,Tumor maligno del colon
+C34,Tumor maligno de los bronquios y del pulmón
+C81,Enfermedad de Hodgkin
+D50,Anemias por deficiencia de hierro
+D64,Otras anemias
+E10,Diabetes mellitus insulinodependiente
+E11,Diabetes mellitus no insulinodependiente
+E14,Diabetes mellitus no especificada
+E86,Depleción del volumen (Deshidratación)
+E87,Otros trastornos de los líquidos y electrolitos
+G00,Meningitis bacteriana
+G20,Enfermedad de Parkinson
+G30,Enfermedad de Alzheimer
+G35,Esclerosis múltiple
+G40,Epilepsia
+G93,Otros trastornos del encéfalo
+I10,Hipertensión esencial (primaria)
+I21,Infarto agudo del miocardio
+I26,Embolia pulmonar
+I46,Paro cardíaco
+I48,Fibrilación y aleteo auricular
+I50,Insuficiencia cardíaca
+I61,Hemorragia intraencefálica
+I63,Infarto cerebral
+I64,Accidente vascular encefálico agudo
+J00,Rinofaringitis aguda (resfriado común)
+J12,Neumonía viral
+J13,Neumonía debida a Streptococcus pneumoniae
+J15,Neumonía bacteriana
+J18,Neumonía organismo no especificado
+J20,Bronquitis aguda
+J44,Otras enfermedades pulmonares obstructivas crónicas (EPOC)
+J45,Asma
+J80,Síndrome de dificultad respiratoria del adulto
+J81,Edema pulmonar
+J96,Insuficiencia respiratoria no clasificada

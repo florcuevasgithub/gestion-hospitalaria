@@ -1,0 +1,20 @@
+# Dependencias de Node (Frontend)
+frontend/node_modules/
+frontend/dist/
+
+# Entornos y Caché de Python (Backend)
+backend/venv/
+backend/env/
+backend/__pycache__/
+backend/.pytest_cache/
+*.pyc
+
+# Variables de Entorno (¡CRÍTICO!)
+.env
+.env.local
+*.env
+*.env.*
+
+# Logs y OS
+*.log
+.DS_Store

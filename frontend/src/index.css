@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+@theme {
+  --color-hospital-disponible:   #22c55e;
+  --color-hospital-ocupada:      #ef4444;
+  --color-hospital-limpieza:     #eab308;
+  --color-hospital-mantenimiento: #6b7280;
+}
