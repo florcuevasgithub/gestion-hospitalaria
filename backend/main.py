@@ -13,6 +13,7 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "https://appgestionhospitalaria.vercel.app",
     "https://appgestionhospitalaria-git-main-florcuevasgithubs-projects.vercel.app",
+    "https://appgestionhospitalaria-mh62o63hs-florcuevasgithubs-projects.vercel.app",
 ]
 
 app.add_middleware(
