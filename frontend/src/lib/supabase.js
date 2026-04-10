@@ -9,6 +9,4 @@ if (!supabaseUrl || !supabaseKey) {
   )
 }
 
-// AGREGA ESTO TEMPORALMENTE
-console.log("LLAVE QUE ESTOY ENVIANDO: ", supabaseKey.substring(0, 15) + "...");
 export const supabase = createClient(supabaseUrl, supabaseKey)
