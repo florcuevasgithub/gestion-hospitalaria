@@ -204,7 +204,7 @@ def get_dashboard_stats(
                 "cama(codigo_cama, tipo),"
                 "paciente_boveda(nombre, apellido, sexo_biologico, fecha_nacimiento)"
             )
-            .not_.is_("fecha_hora_egreso", "null")
+            .not_("fecha_hora_egreso", "is", "null")
             .order("fecha_hora_egreso", desc=True)
             .limit(50)
             .execute()
