@@ -1,6 +1,6 @@
 import math
 from collections import Counter
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -147,28 +147,90 @@ def get_dashboard_stats(
         res_activos = (
             supabase.table("internacion")
             .select(
-                "id, fecha_hora_ingreso,"
+                "id, fecha_hora_ingreso, codigo_cie10,"
                 "cama(id, codigo_cama, tipo),"
-                "paciente_boveda(nombre, apellido)"
+                "paciente_boveda(nombre, apellido, sexo_biologico, fecha_nacimiento)"
             )
             .is_("fecha_hora_egreso", "null")
             .execute()
         )
         activos = res_activos.data or []
 
+        def _horas_minutos_estancia(fecha_ingreso_str: str) -> tuple[int, int]:
+            s = fecha_ingreso_str.replace("Z", "+00:00")
+            try:
+                ingreso = datetime.fromisoformat(s)
+            except ValueError:
+                ingreso = datetime.fromisoformat(s[:26] + s[-6:])
+            delta = datetime.now(timezone.utc) - ingreso
+            total_segundos = max(0, int(delta.total_seconds()))
+            horas_totales = total_segundos // 3600
+            minutos = (total_segundos % 3600) // 60
+            return horas_totales, minutos
+
+        def _calcular_edad(fecha_nac_str: str | None) -> int | None:
+            if not fecha_nac_str:
+                return None
+            try:
+                nac = date.fromisoformat(fecha_nac_str)
+                hoy = date.today()
+                return hoy.year - nac.year - ((hoy.month, hoy.day) < (nac.month, nac.day))
+            except Exception:
+                return None
+
         pacientes_actuales = [
             {
                 "internacion_id": i["id"],
                 "nombre": i.get("paciente_boveda", {}).get("nombre", "—"),
                 "apellido": i.get("paciente_boveda", {}).get("apellido", "—"),
+                "sexo_biologico": i.get("paciente_boveda", {}).get("sexo_biologico", "—"),
+                "edad": _calcular_edad(i.get("paciente_boveda", {}).get("fecha_nacimiento")),
                 "codigo_cama": i.get("cama", {}).get("codigo_cama", "—"),
                 "tipo_cama": i.get("cama", {}).get("tipo", "—"),
                 "dias_estancia": _calcular_dias_estancia(i["fecha_hora_ingreso"], None),
+                "horas_estancia": _horas_minutos_estancia(i["fecha_hora_ingreso"])[0],
+                "minutos_estancia": _horas_minutos_estancia(i["fecha_hora_ingreso"])[1],
+                "codigo_cie10": i.get("codigo_cie10", "—"),
+                "fecha_ingreso": i["fecha_hora_ingreso"],
             }
             for i in activos
         ]
 
-        # ── 5. Respuesta final ────────────────────────────────────────────────
+        # ── 5. Egresos históricos (últimos 50) ───────────────────────────────
+        res_egresos = (
+            supabase.table("internacion")
+            .select(
+                "id, fecha_hora_ingreso, fecha_hora_egreso, tipo_egreso, destino_derivacion, codigo_cie10,"
+                "cama(codigo_cama, tipo),"
+                "paciente_boveda(nombre, apellido, sexo_biologico, fecha_nacimiento)"
+            )
+            .not_.is_("fecha_hora_egreso", "null")
+            .order("fecha_hora_egreso", desc=True)
+            .limit(50)
+            .execute()
+        )
+        egresos_raw = res_egresos.data or []
+
+        egresos_historicos = [
+            {
+                "internacion_id": e["id"],
+                "nombre": e.get("paciente_boveda", {}).get("nombre", "—"),
+                "apellido": e.get("paciente_boveda", {}).get("apellido", "—"),
+                "sexo_biologico": e.get("paciente_boveda", {}).get("sexo_biologico", "—"),
+                "edad": _calcular_edad(e.get("paciente_boveda", {}).get("fecha_nacimiento")),
+                "codigo_cama": e.get("cama", {}).get("codigo_cama", "—"),
+                "tipo_cama": e.get("cama", {}).get("tipo", "—"),
+                "codigo_cie10": e.get("codigo_cie10", "—"),
+                "tipo_egreso": e.get("tipo_egreso", "—"),
+                "destino_derivacion": e.get("destino_derivacion"),
+                "fecha_ingreso": e["fecha_hora_ingreso"],
+                "fecha_egreso": e["fecha_hora_egreso"],
+                "dias_estancia": _calcular_dias_estancia(e["fecha_hora_ingreso"], e["fecha_hora_egreso"]),
+            }
+            for e in egresos_raw
+        ]
+
+        # ── 6. Respuesta final ────────────────────────────────────────────────
         return {
             "periodo_consultado": periodo,
             "camas": {
@@ -185,6 +247,7 @@ def get_dashboard_stats(
             },
             "pacientes_actuales": pacientes_actuales,
             "total_pacientes_internados": len(pacientes_actuales),
+            "egresos_historicos": egresos_historicos,
             # Lista cruda de camas para renderizar la grilla en el frontend
             "_camas_raw": [
                 {

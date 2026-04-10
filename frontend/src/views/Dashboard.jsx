@@ -52,6 +52,7 @@ export default function Dashboard({ onIrAIngreso = () => {} }) {
   const [modalLimpieza, setModalLimpieza] = useState(null)    // { cama }
   const [modalDisponible, setModalDisponible] = useState(null) // { cama }
   const [modalMantenimiento, setModalMantenimiento] = useState(null) // { cama }
+  const [filtroCamas, setFiltroCamas] = useState('Todos')
 
   // Estado de diagnósticos prevalentes y catálogo CIE-10
   const [diagnosticos, setDiagnosticos] = useState([])
@@ -173,60 +174,81 @@ export default function Dashboard({ onIrAIngreso = () => {} }) {
         </div>
       )}
 
-      {/* ── KPI Cards ── */}
       {stats && (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <KpiCard
-              icon={<BedDouble size={20} />}
-              label="Ocupación"
-              value={`${stats.camas.ocupacion_porcentaje}%`}
-              sub={`${stats.camas.ocupadas} / ${stats.camas.total} camas`}
-              color="text-hospital-ocupada"
-            />
-            <KpiCard
-              icon={<HeartPulse size={20} />}
-              label="Internados ahora"
-              value={stats.total_pacientes_internados}
-              sub={`${stats.camas.disponibles} camas libres`}
-              color="text-indigo-400"
-            />
-            <KpiCard
-              icon={<Clock size={20} />}
-              label="Estancia media"
-              value={`${stats.kpis.comunes.promedio_estancia_dias}d`}
-              sub={`KPC: ${stats.kpis.kpc.promedio_estancia_dias}d`}
-              color="text-hospital-limpieza"
-            />
-            <KpiCard
-              icon={<Skull size={20} />}
-              label="Mortalidad"
-              value={`${stats.kpis.comunes.tasa_mortalidad_pct}%`}
-              sub={`KPC: ${stats.kpis.kpc.tasa_mortalidad_pct}%`}
-              color="text-red-400"
-            />
-          </div>
-
-          {/* ── Contadores de estado ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+          {/* 1 ── Contadores de estado de camas ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
             {[
-              { estado: 'Disponible', count: stats.camas.disponibles },
-              { estado: 'Ocupada',    count: stats.camas.ocupadas },
-              { estado: 'Limpieza',   count: stats.camas.limpieza },
-              { estado: 'Mantenimiento', count: stats.camas.mantenimiento },
-            ].map(({ estado, count }) => (
-              <div key={estado} className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
-                <span className={`w-3 h-3 rounded-full shrink-0 ${COLOR_ESTADO[estado]}`} />
+              { estado: 'Disponible',    label: 'Cama Disponible',      count: stats.camas.disponibles },
+              { estado: 'Ocupada',       label: 'Cama Ocupada',         count: stats.camas.ocupadas },
+              { estado: 'Limpieza',      label: 'Cama en Limpieza',     count: stats.camas.limpieza },
+              { estado: 'Mantenimiento', label: 'Cama en Mantenimiento', count: stats.camas.mantenimiento },
+            ].map(({ estado, label, count }) => (
+              <div key={estado} className="flex items-center gap-4 bg-gray-900 border border-gray-800 rounded-2xl px-5 py-4">
+                <span className={`w-4 h-4 rounded-full shrink-0 ${COLOR_ESTADO[estado]}`} />
                 <div>
-                  <p className="text-xs text-gray-400">{estado}</p>
-                  <p className="text-lg font-semibold">{count}</p>
+                  <p className="text-sm text-gray-400">{label}</p>
+                  <p className="text-3xl font-bold tracking-tight mt-0.5">{count}</p>
                 </div>
               </div>
             ))}
           </div>
 
-          {/* ── Diagnósticos Prevalentes ── */}
-          <section className="mb-8">
+          {/* 2 ── Mapa de camas ── */}
+          <section className="mb-10">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest">
+                Mapa de Camas
+              </h2>
+              <div className="flex gap-1.5">
+                {['Todos', 'Disponible', 'Ocupada', 'Limpieza', 'Mantenimiento'].map((estado) => (
+                  <button
+                    key={estado}
+                    onClick={() => setFiltroCamas(estado)}
+                    className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                      filtroCamas === estado
+                        ? estado === 'Todos'
+                          ? 'bg-indigo-600 text-white'
+                          : `${COLOR_ESTADO[estado]} text-white`
+                        : 'bg-gray-800 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {estado}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <CamasGrid
+              camas={(stats._camas_raw ?? []).filter(
+                (c) => filtroCamas === 'Todos' || c.estado === filtroCamas
+              )}
+              pacientesPorCama={pacientesPorCama}
+              onCamaClick={handleCamaClick}
+            />
+          </section>
+
+          {/* 3 ── Tabla de pacientes internados ── */}
+          {stats.pacientes_actuales?.length > 0 && (
+            <section className="mb-10">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">
+                Pacientes Internados
+              </h2>
+              <PacientesTable pacientes={stats.pacientes_actuales} catalogoCIE10={catalogoCIE10} />
+            </section>
+          )}
+
+          {/* 4 ── Tabla de egresos históricos ── */}
+          {stats.egresos_historicos?.length > 0 && (
+            <section className="mb-10">
+              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">
+                Egresos Recientes
+              </h2>
+              <EgresosTable egresos={stats.egresos_historicos} catalogoCIE10={catalogoCIE10} />
+            </section>
+          )}
+
+          {/* 5 ── Diagnósticos Prevalentes ── */}
+          <section className="mb-10">
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">
               Diagnósticos Prevalentes (Top CIE-10)
             </h2>
@@ -237,27 +259,42 @@ export default function Dashboard({ onIrAIngreso = () => {} }) {
             />
           </section>
 
-          {/* ── Grilla de camas ── */}
+          {/* 6 ── KPIs clínicos ── */}
           <section>
             <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">
-              Mapa de Camas
+              Indicadores Clínicos
             </h2>
-            <CamasGrid
-              camas={stats._camas_raw ?? []}
-              pacientesPorCama={pacientesPorCama}
-              onCamaClick={handleCamaClick}
-            />
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <KpiCard
+                icon={<BedDouble size={20} />}
+                label="Ocupación"
+                value={`${stats.camas.ocupacion_porcentaje}%`}
+                sub={`${stats.camas.ocupadas} / ${stats.camas.total} camas`}
+                color="text-hospital-ocupada"
+              />
+              <KpiCard
+                icon={<HeartPulse size={20} />}
+                label="Internados ahora"
+                value={stats.total_pacientes_internados}
+                sub={`${stats.camas.disponibles} camas libres`}
+                color="text-indigo-400"
+              />
+              <KpiCard
+                icon={<Clock size={20} />}
+                label="Estancia media"
+                value={`${stats.kpis.comunes.promedio_estancia_dias}d`}
+                sub={`KPC: ${stats.kpis.kpc.promedio_estancia_dias}d`}
+                color="text-hospital-limpieza"
+              />
+              <KpiCard
+                icon={<Skull size={20} />}
+                label="Mortalidad"
+                value={`${stats.kpis.comunes.tasa_mortalidad_pct}%`}
+                sub={`KPC: ${stats.kpis.kpc.tasa_mortalidad_pct}%`}
+                color="text-red-400"
+              />
+            </div>
           </section>
-
-          {/* ── Tabla de pacientes ── */}
-          {stats.pacientes_actuales?.length > 0 && (
-            <section className="mt-10">
-              <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-widest mb-4">
-                Pacientes Internados
-              </h2>
-              <PacientesTable pacientes={stats.pacientes_actuales} />
-            </section>
-          )}
         </>
       )}
 
@@ -371,9 +408,14 @@ function CamasGrid({ camas, pacientesPorCama, onCamaClick }) {
                 <p className="text-xs font-medium text-white leading-tight truncate">
                   {paciente.apellido}, {paciente.nombre}
                 </p>
+                {paciente.codigo_cie10 && paciente.codigo_cie10 !== '—' && (
+                  <p className="text-[10px] text-indigo-400 font-mono mt-0.5 truncate">
+                    {paciente.codigo_cie10}
+                  </p>
+                )}
                 <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
                   <Clock size={10} />
-                  {paciente.dias_estancia} {paciente.dias_estancia === 1 ? 'día' : 'días'}
+                  {formatEstancia(paciente.dias_estancia, paciente.horas_estancia, paciente.minutos_estancia)}
                 </p>
               </div>
             ) : cama.estado === 'Ocupada' ? (
@@ -400,39 +442,261 @@ function CamasGrid({ camas, pacientesPorCama, onCamaClick }) {
 
 // ── Tabla de pacientes ────────────────────────────────────────────────────────
 
-function PacientesTable({ pacientes }) {
+// ── Helpers compartidos ───────────────────────────────────────────────────────
+
+const formatFechaHora = (isoStr) => {
+  if (!isoStr) return '—'
+  const d = new Date(isoStr)
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+}
+
+const formatEstancia = (dias, horas, minutos) => {
+  const h = horas ?? 0
+  const m = minutos ?? 0
+  const horasRestantes = h % 24
+  const sufHoras = horasRestantes > 0 ? ` ${horasRestantes}h${m > 0 ? ` ${m}m` : ''}` : ''
+  if (dias >= 1) return `${dias}d${sufHoras}`
+  if (h > 0) return `${h}h${m > 0 ? ` ${m}m` : ''}`
+  return `${m}m`
+}
+
+function FilaFiltros({ filtros, onChange, opcionesSexo, opcionesDiagnostico, opcionesMotivo }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-800">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
-            <th className="px-4 py-3 text-left">Paciente</th>
-            <th className="px-4 py-3 text-left">Cama</th>
-            <th className="px-4 py-3 text-left">Tipo</th>
-            <th className="px-4 py-3 text-right">Días de estancia</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-800">
-          {pacientes.map((p) => (
-            <tr key={p.internacion_id} className="bg-gray-950 hover:bg-gray-900 transition-colors">
-              <td className="px-4 py-3 font-medium text-white">
-                {p.apellido}, {p.nombre}
-              </td>
-              <td className="px-4 py-3 font-mono text-gray-300">{p.codigo_cama}</td>
-              <td className="px-4 py-3">
-                {p.tipo_cama === 'KPC' ? (
-                  <span className="text-[11px] font-bold text-yellow-400 bg-yellow-400/10 rounded px-1.5 py-0.5">KPC</span>
-                ) : (
-                  <span className="text-[11px] text-gray-500">Común</span>
-                )}
-              </td>
-              <td className="px-4 py-3 text-right tabular-nums text-gray-300">
-                {p.dias_estancia} {p.dias_estancia === 1 ? 'día' : 'días'}
-              </td>
+    <div className="flex flex-wrap gap-2 mb-3">
+      {/* Sexo */}
+      <select
+        value={filtros.sexo}
+        onChange={(e) => onChange({ ...filtros, sexo: e.target.value })}
+        className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      >
+        <option value="">Sexo: todos</option>
+        {opcionesSexo.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+
+      {/* Edad mín */}
+      <input
+        type="number"
+        min={0} max={120}
+        placeholder="Edad mín"
+        value={filtros.edadMin}
+        onChange={(e) => onChange({ ...filtros, edadMin: e.target.value })}
+        className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-2 py-1.5 w-24 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      />
+
+      {/* Edad máx */}
+      <input
+        type="number"
+        min={0} max={120}
+        placeholder="Edad máx"
+        value={filtros.edadMax}
+        onChange={(e) => onChange({ ...filtros, edadMax: e.target.value })}
+        className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-2 py-1.5 w-24 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      />
+
+      {/* Diagnóstico */}
+      <select
+        value={filtros.cie10}
+        onChange={(e) => onChange({ ...filtros, cie10: e.target.value })}
+        className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      >
+        <option value="">Diagnóstico: todos</option>
+        {opcionesDiagnostico.map((d) => <option key={d} value={d}>{d}</option>)}
+      </select>
+
+      {/* Motivo de egreso (solo para tabla de egresos) */}
+      {opcionesMotivo && (
+        <select
+          value={filtros.motivo}
+          onChange={(e) => onChange({ ...filtros, motivo: e.target.value })}
+          className="bg-gray-800 border border-gray-700 text-gray-300 text-xs rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        >
+          <option value="">Motivo: todos</option>
+          {opcionesMotivo.map((m) => <option key={m} value={m}>{m}</option>)}
+        </select>
+      )}
+
+      {/* Limpiar */}
+      {(filtros.sexo || filtros.edadMin || filtros.edadMax || filtros.cie10 || filtros.motivo) && (
+        <button
+          onClick={() => onChange({ sexo: '', edadMin: '', edadMax: '', cie10: '', motivo: '' })}
+          className="text-xs text-gray-500 hover:text-red-400 transition-colors px-2"
+        >
+          × Limpiar
+        </button>
+      )}
+    </div>
+  )
+}
+
+function aplicarFiltros(lista, filtros) {
+  return lista.filter((p) => {
+    if (filtros.sexo && p.sexo_biologico !== filtros.sexo) return false
+    if (filtros.edadMin !== '' && (p.edad ?? 0) < Number(filtros.edadMin)) return false
+    if (filtros.edadMax !== '' && (p.edad ?? 999) > Number(filtros.edadMax)) return false
+    if (filtros.cie10 && p.codigo_cie10 !== filtros.cie10) return false
+    if (filtros.motivo && p.tipo_egreso !== filtros.motivo) return false
+    return true
+  })
+}
+
+// ── Tabla de Pacientes Internados ─────────────────────────────────────────────
+
+function PacientesTable({ pacientes, catalogoCIE10 = {} }) {
+  const [filtros, setFiltros] = useState({ sexo: '', edadMin: '', edadMax: '', cie10: '', motivo: '' })
+
+  const opcionesSexo = [...new Set(pacientes.map((p) => p.sexo_biologico).filter(Boolean))]
+  const opcionesDiagnostico = [...new Set(pacientes.map((p) => p.codigo_cie10).filter((c) => c && c !== '—'))]
+  const filtrados = aplicarFiltros(pacientes, filtros)
+
+  return (
+    <div>
+      <FilaFiltros
+        filtros={filtros}
+        onChange={setFiltros}
+        opcionesSexo={opcionesSexo}
+        opcionesDiagnostico={opcionesDiagnostico}
+      />
+      <div className="overflow-x-auto rounded-xl border border-gray-800">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+              <th className="px-4 py-3 text-left">Paciente</th>
+              <th className="px-4 py-3 text-left">Diagnóstico</th>
+              <th className="px-4 py-3 text-left">Ingreso</th>
+              <th className="px-4 py-3 text-right">Estancia</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-gray-800">
+            {filtrados.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-xs text-gray-600">
+                  No hay pacientes que coincidan con los filtros.
+                </td>
+              </tr>
+            ) : filtrados.map((p) => (
+              <tr key={p.internacion_id} className="bg-gray-950 hover:bg-gray-900 transition-colors">
+                <td className="px-4 py-3">
+                  <p className="font-medium text-white">{p.apellido}, {p.nombre}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    {p.sexo_biologico}{p.edad != null ? ` · ${p.edad} años` : ''}
+                  </p>
+                  <p className="text-[11px] mt-0.5">
+                    {p.tipo_cama === 'KPC'
+                      ? <span className="font-bold text-yellow-400 bg-yellow-400/10 rounded px-1.5 py-0.5">KPC · {p.codigo_cama}</span>
+                      : <span className="text-gray-500 font-mono">{p.codigo_cama}</span>
+                    }
+                  </p>
+                </td>
+                <td className="px-4 py-3 max-w-[200px]">
+                  <span className="text-xs font-mono text-indigo-400">{p.codigo_cie10}</span>
+                  <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                    {catalogoCIE10[p.codigo_cie10] ?? '—'}
+                  </p>
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                  {formatFechaHora(p.fecha_ingreso)}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  <span className="text-white font-medium">
+                    {formatEstancia(p.dias_estancia, p.horas_estancia, p.minutos_estancia)}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Tabla de Egresos Históricos ───────────────────────────────────────────────
+
+const COLOR_EGRESO = {
+  'Alta Médica': 'text-green-400 bg-green-400/10',
+  'Defunción':   'text-red-400 bg-red-400/10',
+  'Derivación':  'text-blue-400 bg-blue-400/10',
+}
+
+function EgresosTable({ egresos, catalogoCIE10 = {} }) {
+  const [filtros, setFiltros] = useState({ sexo: '', edadMin: '', edadMax: '', cie10: '', motivo: '' })
+
+  const opcionesSexo       = [...new Set(egresos.map((e) => e.sexo_biologico).filter(Boolean))]
+  const opcionesDiagnostico = [...new Set(egresos.map((e) => e.codigo_cie10).filter((c) => c && c !== '—'))]
+  const opcionesMotivo     = [...new Set(egresos.map((e) => e.tipo_egreso).filter(Boolean))]
+  const filtrados = aplicarFiltros(egresos, filtros)
+
+  return (
+    <div>
+      <FilaFiltros
+        filtros={filtros}
+        onChange={setFiltros}
+        opcionesSexo={opcionesSexo}
+        opcionesDiagnostico={opcionesDiagnostico}
+        opcionesMotivo={opcionesMotivo}
+      />
+      <div className="overflow-x-auto rounded-xl border border-gray-800">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+              <th className="px-4 py-3 text-left">Paciente</th>
+              <th className="px-4 py-3 text-left">Diagnóstico</th>
+              <th className="px-4 py-3 text-left">Ingreso</th>
+              <th className="px-4 py-3 text-left">Egreso</th>
+              <th className="px-4 py-3 text-left">Motivo</th>
+              <th className="px-4 py-3 text-right">Estancia</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-800">
+            {filtrados.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-4 py-6 text-center text-xs text-gray-600">
+                  No hay egresos que coincidan con los filtros.
+                </td>
+              </tr>
+            ) : filtrados.map((e) => (
+              <tr key={e.internacion_id} className="bg-gray-950 hover:bg-gray-900 transition-colors">
+                <td className="px-4 py-3">
+                  <p className="font-medium text-white">{e.apellido}, {e.nombre}</p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    {e.sexo_biologico}{e.edad != null ? ` · ${e.edad} años` : ''}
+                  </p>
+                  <p className="text-[11px] mt-0.5">
+                    {e.tipo_cama === 'KPC'
+                      ? <span className="font-bold text-yellow-400 bg-yellow-400/10 rounded px-1.5 py-0.5">KPC · {e.codigo_cama}</span>
+                      : <span className="text-gray-500 font-mono">{e.codigo_cama}</span>
+                    }
+                  </p>
+                </td>
+                <td className="px-4 py-3 max-w-[180px]">
+                  <span className="text-xs font-mono text-indigo-400">{e.codigo_cie10}</span>
+                  <p className="text-[11px] text-gray-400 mt-0.5 truncate">
+                    {catalogoCIE10[e.codigo_cie10] ?? '—'}
+                  </p>
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                  {formatFechaHora(e.fecha_ingreso)}
+                </td>
+                <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">
+                  {formatFechaHora(e.fecha_egreso)}
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`text-[11px] font-semibold rounded px-1.5 py-0.5 ${COLOR_EGRESO[e.tipo_egreso] ?? 'text-gray-400 bg-gray-800'}`}>
+                    {e.tipo_egreso}
+                  </span>
+                  {e.destino_derivacion && (
+                    <p className="text-[10px] text-gray-500 mt-0.5 truncate">{e.destino_derivacion}</p>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums text-gray-300 text-xs">
+                  {e.dias_estancia}d
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -567,7 +831,7 @@ function ModalEgreso({ cama, paciente, onClose, onExito }) {
           </p>
           <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
             <Clock size={11} />
-            {paciente.dias_estancia} {paciente.dias_estancia === 1 ? 'día' : 'días'} de estancia
+                  {formatEstancia(paciente.dias_estancia, paciente.horas_estancia, paciente.minutos_estancia)} de estancia
           </p>
         </div>
 
