@@ -74,14 +74,18 @@ export default function Dashboard({ onIrAIngreso = () => {} }) {
   const cargarDiagnosticos = useCallback(async () => {
     setCargandoDiagnosticos(true)
     try {
-      const [dataRanking, dataCatalogo] = await Promise.all([
+      const [resultRanking, resultCatalogo] = await Promise.allSettled([
         getDiagnosticosPrevalentes(),
         getCatalogoCIE10(),
       ])
-      setDiagnosticos(dataRanking.ranking ?? [])
-      setCatalogoCIE10(dataCatalogo)
+      if (resultRanking.status === 'fulfilled') {
+        setDiagnosticos(resultRanking.value.ranking ?? [])
+      }
+      if (resultCatalogo.status === 'fulfilled') {
+        setCatalogoCIE10(resultCatalogo.value)
+      }
     } catch {
-      setDiagnosticos([])
+      // silencioso — cada rama ya maneja su propio error arriba
     } finally {
       setCargandoDiagnosticos(false)
     }
@@ -92,7 +96,9 @@ export default function Dashboard({ onIrAIngreso = () => {} }) {
   }, [periodo, cargarStats])
 
   useEffect(() => {
-    cargarDiagnosticos()
+    // Espera 500ms para asegurar que la sesión JWT esté lista antes de llamar
+    const t = setTimeout(() => cargarDiagnosticos(), 500)
+    return () => clearTimeout(t)
   }, [cargarDiagnosticos])
 
   const pacientesPorCama = stats
