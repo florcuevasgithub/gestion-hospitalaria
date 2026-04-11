@@ -136,12 +136,19 @@ export default function Dashboard({ onIrAIngreso = () => {} }) {
     <div className="min-h-screen bg-gray-950 text-white px-6 py-8">
 
       {/* ── Encabezado ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard UTI</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Estado en tiempo real de la Unidad de Terapia Intensiva</p>
-        </div>
+      <div className="mb-4">
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard UTI</h1>
+        <p className="text-gray-400 text-sm mt-0.5">Estado en tiempo real de la Unidad de Terapia Intensiva</p>
+      </div>
 
+      {/* ── Barra de período sticky ── */}
+      <div className="sticky top-0 z-30 bg-gray-950/90 backdrop-blur border-b border-gray-800/60 -mx-6 px-6 py-2 mb-6 flex items-center justify-between gap-4">
+        <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">
+          Período activo:
+          <span className="ml-1.5 text-indigo-400 font-semibold">
+            {PERIODOS.find(p => p.value === periodo)?.label}
+          </span>
+        </span>
         <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-xl p-1">
           {PERIODOS.map((p) => (
             <button
